@@ -1,32 +1,29 @@
-#usage "<b>Eagle schematic exporting tool  version 1.2 </b>\n"
+#usage "<b>Eagle schematic exporting tool  version 1.4 </b>\n"
        "<p>"
        "This ULP can convert an Eagle CAD schematics into SVG files."
        "<p>"
        "Load any schematic and execute the ULP in the eagle."
        "<p>"
-	   "For drill holes to show up correctly enable DRILLS layer, and set its color to white (light gray)"
-       "<p>"
-	   "For dimensions to show up correctly change its color to anything but white (light gray), and set its wire width to non-zero."
-       "<p>"
-       "<author>Author: xTitoris</author><br>"
+       "<author>Author: xtitoris</author><br>"
        "based on eagle2svg by nils.springob@nicai-systems.de<br>"
        "<br>"
        "Known issues in board export:<ul>"
        "<li>elongated pads are not supported"
-       "<li>non vector-text is not rotated correctly"
 	   "<li>layers are not placed correctly"
        "</ul>"
        
-real VERSION   = 1.2;
+real VERSION	= 1.4;
+string DESCR	= "";
 
 /*
  * CHANGELOG================================================
- *
+ * 1.4 (15.07.2012): Added support for all text alignments, fixed text, drill holes, white colored wires (as in native print-to-pdf, exports as black), zero-width wires
+ * 1.3 (02.07.2012): Fixed pads output, added dimensions output for Eagle 6
  * 1.2 (29.11.2010): Fixed drill holes, optimized stylesheet generation
  * 1.1 (??.04.2008): SVG export for board files      
  * 1.0 (16.04.2008): Some bugfixes      
  * 0.2 (11.04.2008): Using CSS for layer-styles      
- * 0.1 (08.03.2008): Initial version    
+ * 0.1 (08.03.2008): Initial version
  *
  */  
 
@@ -39,7 +36,7 @@ real VERSION   = 1.2;
 int g_monochrome = 0;
 int g_only_visible = 1;
 int g_used_layers[];
-
+int zero_width = 1600;
 
 //------------------------------------------------------
 // generate html color code  
@@ -68,6 +65,7 @@ string encodeText(string strText)
 		case '<': newText += "&lt;"; break; 
 		case '>': newText += "&gt;"; break;
 		case '&': newText += "&amp;"; break;
+		case '°': newText += "&#x00B0;"; break;
 		default:
 			if (c>=0xc0)
 			{
@@ -94,19 +92,24 @@ string encodeText(string strText)
 
 string svgLineStyle(int width, int cap)
 {
-	string lineCap="round";
+	string lineCap;// = "round";
 
 	switch (cap)
 	{
-	case CAP_FLAT: lineCap = "butt"; break;
-	case CAP_ROUND: lineCap = "round"; break;
-	default: lineCap = "round"; break;
+		case CAP_FLAT: lineCap = "butt"; break;
+		case CAP_ROUND: lineCap = "round"; break;
+		default: lineCap = "round"; break;
 	}
-
+	
+	//Zero-width line fix.
+	//TODO: Move to options?
+	if (width == 0)
+		width = zero_width;
+		
 	string style;
 	sprintf(style, "stroke-width:%f; stroke-linecap:%s",
 	u2mm(width), lineCap);
-	return style;    
+	return style;
 }
 
 string svgTransform(int x, int y, real angle)
@@ -139,10 +142,6 @@ void svgWriteArc(int x1, int y1, int x2, int y2, int radius, char longpath, int 
 
 void svgWriteRect(int x1, int y1, int x2, int y2, real angle, int layer)
 {
-	if (g_used_layers[layer]==0)
-	{
-		return;
-	}
 	string rotation="";
 
 	if (angle!=0.0)
@@ -160,10 +159,6 @@ void svgWriteRect(int x1, int y1, int x2, int y2, real angle, int layer)
 
 void svgWriteRectCenter(int x, int y, int dx, int dy, real angle, int layer)
 {
-	if (g_used_layers[layer]==0)
-	{
-		return;
-	}
 	string rotation = svgTransform(x, y, angle);
 
 	printf("<rect class='l%d' x='%f' y='%f' width='%f' height='%f' %s/>\n",
@@ -175,10 +170,6 @@ void svgWriteRectCenter(int x, int y, int dx, int dy, real angle, int layer)
 
 void svgWriteOctCenter(int x, int y, int dx, int dy, real angle, int layer)
 {
-	if (g_used_layers[layer]==0)
-	{
-		return;
-	}
 	string rotation = svgTransform(x, y, angle);
 
 	real x1 = u2mm(dx)/2; 
@@ -201,19 +192,16 @@ void svgWriteOctCenter(int x, int y, int dx, int dy, real angle, int layer)
 
 void svgWriteRoundRectCenter(int x, int y, int w, int h, int roundness, real angle, int layer)
 {
-	if (g_used_layers[layer]==0)
-	{
-		return;
-	}
+	//if any of that is 0 do nothing
+	if (x & y & w & h == 0)
+	{ return; }
+	
 	string rotation = svgTransform(x, y, angle);
 
-	if (w<h){
-		roundness = w*roundness/200;
-	}
+	if (w<h)
+		{ roundness = w*roundness/200; }
 	else
-	{
-		roundness = h*roundness/200;
-	}
+		{ roundness = h*roundness/200; }
 
 	printf("<rect class='l%d' x='%f' y='%f' width='%f' height='%f' rx='%f' %s/>\n",
 	layer,
@@ -223,11 +211,20 @@ void svgWriteRoundRectCenter(int x, int y, int w, int h, int roundness, real ang
 	rotation);
 }
 
+void svgWriteDot(int x, int y, int diameter, int layer)
+{
+	printf("<circle class='j%d' cx='%f' cy='%f' r='%f'/>\n", 
+	layer,
+	u2mm(x), u2mm(-y),
+	u2mm(diameter)/2.0);
+}
 
 void svgWriteCircle(int x, int y, int radius, int lwidth, int layer)
 {
-	if (g_used_layers[layer]==0) {
-	  return;
+	if (lwidth == 0)
+	{
+		svgWriteDot(x, y, 2*radius, layer);
+		return;
 	}
 	printf("<circle class='l%d' cx='%f' cy='%f' r='%f' style='stroke-width:%f'/>\n", 
 	layer,
@@ -236,27 +233,62 @@ void svgWriteCircle(int x, int y, int radius, int lwidth, int layer)
 	u2mm(lwidth));
 }
 
-void svgWriteDot(int x, int y, int diameter, int layer)
+void svgWriteText(string text, int x, int y, real angle, int size, int align, int valign, int xflip, int layer, int font)
 {
-	if (g_used_layers[layer]==0)
-	{
-		return;
-	}
-	printf("<circle class='j%d' cx='%f' cy='%f' r='%f'/>\n", 
+	string style;
+	sprintf(style, "font-size:%fpt;", u2mm(size)*1.1);
+	if (font==FONT_FIXED)
+	{style+="font-family:courier new;";}
+	
+	int dy = 0;	
+	if (align == -1)
+	{	style += " text-anchor:end;"; }
+	else if (align == 0)
+	{	style += " text-anchor:middle;"; }
+	if (valign == -1)
+	{	dy = size;}
+	else if (valign == 0)
+	{	dy = size/2; }
+	
+	string trn1 = "";	//translate position
+	string rot = "";	//rotate
+	string scl = "";	//flip
+	string trn2 = "";	//translate valign
+	
+	sprintf(trn1, "translate(%f, %f)", u2mm(x), u2mm(-y));
+	
+	if (angle!=0)
+	{ sprintf(rot, " rotate(%f)", angle); }
+	if (xflip!=1)
+	{ sprintf(scl, " scale(%d, 1)", xflip); }
+	if (dy!=0)
+	{ sprintf(trn2," translate(0, %f)", u2mm(dy)); }
+	
+	printf( "<text class='l%d' style='%s' transform='%s%s%s%s'>%s</text>\n",
 	layer,
-	u2mm(x), u2mm(-y),
-	u2mm(diameter)/2.0);
+	style,
+	trn1, rot, scl, trn2,
+	text);
+	
 }
-
 
 void svgWritePathStart(int layer, string style)
 {
 	printf( "<path class='l%d' style='%s' d='", layer, style);
 }
 
-void svgWritePathSegment(int x1, int y1, int x2, int y2)
+void svgWritePathLine(int x1, int y1, int x2, int y2)
 {
 	printf( " M %f,%f L %f,%f", u2mm(x1), u2mm(-y1), u2mm(x2), u2mm(-y2));    
+}
+
+void svgWritePathArc(int x1, int y1, int x2, int y2, int radius, char longpath)
+{
+	printf(" M %f,%f A %f %f 0 %c 0 %f,%f",
+	u2mm(x1), u2mm(-y1),
+	u2mm(radius), u2mm(radius),
+	longpath,
+	u2mm(x2), u2mm(-y2));
 }
 
 void svgWritePathEnd()
@@ -265,52 +297,13 @@ void svgWritePathEnd()
 }
 
 
-
-void svgWriteText(int x, int y, real angle, char align, string text, int size, int layer)
-{
-	if (g_used_layers[layer]==0)
-	{
-		return;
-	}
-	string style;
-	sprintf(style, "font-size:%fpt;", u2mm(size)*1.1);
-
-	if (align=='e')
-	{
-		style += " text-anchor:end;";
-	}
-
-	if (angle==0.0)
-	{
-		printf( "<text class='l%d' x='%f' y='%f' style='%s'>%s</text>\n",
-		layer,
-		u2mm(x), u2mm(-y), 
-		style, 
-		text);
-
-	}
-	else
-	{
-		printf( "<text class='l%d' x='0' y='0' style='%s' transform='translate(%f, %f) rotate(%f)'>%s</text>\n",
-		layer,
-		style,
-		u2mm(x), u2mm(-y), 
-		angle,
-		text);  
-	}
-}
-
-
-
 //------------------------------------------------------
 // write UL piece
 //------------------------------------------------------
 void write_piece(UL_WIRE W)
 {
 	if (g_used_layers[W.layer]==0)
-	{
-		return;
-	}
+	{ return; }
 
 	string style = svgLineStyle(W.width, W.cap);
 	
@@ -333,6 +326,29 @@ void write_piece(UL_WIRE W)
 	}
 }
 
+//------------------------------------------------------
+// write UL piece
+//------------------------------------------------------
+void write_piece_segment(UL_WIRE W)
+{
+	if (g_used_layers[W.layer]==0)
+	{ return; }
+	
+	if (W.arc)
+	{
+		char longpath;
+		if( abs(W.arc.angle2-W.arc.angle1) < 180.0 )
+		{ longpath='0';	}
+		else
+		{ longpath='1';	}
+		svgWritePathArc(W.arc.x1, W.arc.y1, W.arc.x2, W.arc.y2, W.arc.radius, longpath);
+	}
+	else
+	{
+		svgWritePathLine(W.x1, W.y1, W.x2, W.y2);
+	}
+}
+
 
 //------------------------------------------------------
 // write UL wire
@@ -340,9 +356,7 @@ void write_piece(UL_WIRE W)
 void write_wire(UL_WIRE W)
 {
 	if (g_used_layers[W.layer]==0)
-	{
-		return;
-	}
+	{ return; }
 
 	if ( W.style == WIRE_STYLE_LONGDASH || W.style == WIRE_STYLE_SHORTDASH || W.style == WIRE_STYLE_DASHDOT )
 	{
@@ -372,6 +386,34 @@ void write_wire(UL_WIRE W)
 	}
 }
 
+//------------------------------------------------------
+// write UL wire
+//------------------------------------------------------
+void write_wire_segment(UL_WIRE W)
+{
+	if (g_used_layers[W.layer]==0)
+	{ return; }
+
+	if ( W.style == WIRE_STYLE_LONGDASH || W.style == WIRE_STYLE_SHORTDASH || W.style == WIRE_STYLE_DASHDOT )
+	{
+		W.pieces(P)
+		{ write_piece(P); }
+	}
+	else if (W.arc)
+	{
+		char longpath;
+		if( abs(W.arc.angle2-W.arc.angle1) < 180.0 )
+		{ longpath='0';	}
+		else
+		{ longpath='1';	}
+		svgWritePathArc(W.arc.x1, W.arc.y1, W.arc.x2, W.arc.y2, W.arc.radius, longpath);
+	}
+	else
+	{
+		svgWritePathLine(W.x1, W.y1, W.x2, W.y2);
+	}
+}
+
 
 //------------------------------------------------------
 // write UL rectangle
@@ -379,9 +421,7 @@ void write_wire(UL_WIRE W)
 void write_rectangle(UL_RECTANGLE R)
 {
 	if (g_used_layers[R.layer]==0)
-	{
-		return;
-	}
+	{ return; }
 	svgWriteRect(R.x1, R.y1, R.x2, R.y2, R.angle, R.layer);
 }
 
@@ -391,10 +431,6 @@ void write_rectangle(UL_RECTANGLE R)
 //------------------------------------------------------
 void write_vector_text(UL_TEXT T)
 {
-	if (g_used_layers[T.layer]==0)
-	{
-		return;
-	}
 	int cnt=0;
 	T.wires(W)
 	{
@@ -404,7 +440,7 @@ void write_vector_text(UL_TEXT T)
 			string style = svgLineStyle(W.width, W.cap);
 			svgWritePathStart(W.layer, style);
 		}
-		svgWritePathSegment(W.x1, W.y1, W.x2, W.y2);
+		svgWritePathLine(W.x1, W.y1, W.x2, W.y2);
 		cnt++;
 	}
 	if (cnt>0)
@@ -418,11 +454,6 @@ void write_vector_text(UL_TEXT T)
 //------------------------------------------------------
 void write_prop_text(UL_TEXT T)
 {
-	if (g_used_layers[T.layer]==0)
-	{
-		return;
-	}
-
 	string newText = encodeText(T.value);
 
 	int posX = T.x;
@@ -430,45 +461,38 @@ void write_prop_text(UL_TEXT T)
 	int textAngle = T.angle;
 	int textSize = T.size;
 
-	char hmode, vmode, rmode;
-
-	if( T.mirror > 0 )
+	int hmodei, vmodei;	//1:bottom left, 0:center, -1:top right
+	hmodei = 1;
+	vmodei = 1;
+	
+	int xflip = 1;
+	
+	switch(T.align)
 	{
-		switch( textAngle )
-		{
-		case 0:   vmode='e'; hmode='b'; rmode='0'; break;
-		case 90:  vmode='b'; hmode='t'; rmode='9'; break;
-		case 180: vmode='b'; hmode='t'; rmode='0'; break;
-		case 270: vmode='e'; hmode='b'; rmode='9'; break;
-		} 
+		case 0: break;							//ALIGN_BOTTOM_LEFT:
+		case 1: hmodei = 0; break;				//ALIGN_BOTTOM_CENTER:
+		case 2: hmodei = -1; break;				//ALIGN_BOTTOM_RIGHT:
+		case 3: vmodei = 0; break;				//ALIGN_CENTER_LEFT:
+		case 4: vmodei = 0; hmodei = 0; break;	//ALIGN_CENTER:
+		case 5: vmodei = 0; hmodei = -1; break;	//ALIGN_CENTER_RIGHT:
+		case 6: vmodei = -1; break;				//ALIGN_TOP_LEFT:
+		case 7: vmodei = -1; hmodei = 0; break;	//ALIGN_TOP_CENTER:
+		case 8: vmodei = -1; hmodei = -1; break;//ALIGN_TOP_RIGHT:
 	}
-	else
+	if (textAngle > 90 && textAngle < 270 && T.spin == 0)
 	{
-		switch( textAngle )
-		{
-		case 0:   vmode='b'; hmode='b'; rmode='0'; break;
-		case 90:  vmode='b'; hmode='b'; rmode='9'; break;
-		case 180: vmode='e'; hmode='t'; rmode='0'; break;
-		case 270: vmode='e'; hmode='t'; rmode='9'; break;
-		} 
+		hmodei *= -1;
+		vmodei *= -1;
+		textAngle -= 180;
 	}
-
-	if (rmode=='0')
+	if (T.mirror > 0)
 	{
-		if (hmode=='t')
-		{
-			posY -= textSize;
-		}
-		svgWriteText(posX, posY, 0.0, vmode, newText, textSize, T.layer);
+		xflip = -1;
+		textAngle = -textAngle;
 	}
-	else
-	{
-		if (hmode=='t')
-		{
-			posX += textSize;
-		}
-		svgWriteText(posX, posY, -90.0, vmode, newText, textSize, T.layer);
-	}
+	
+	svgWriteText(newText, posX, posY, -textAngle, textSize, hmodei, vmodei, xflip, T.layer, T.font);
+	
 }
 
 
@@ -477,10 +501,9 @@ void write_prop_text(UL_TEXT T)
 //------------------------------------------------------
 void write_text(UL_TEXT T)
 {
-	if (g_used_layers[T.layer]==0)
-	{
-		return;
-	}
+	if (g_used_layers[T.layer] == 0)// && (current_layer != 0 || T.layer != current_layer))
+	{ return; }
+	
 	if (T.font==FONT_VECTOR)
 	{
 		write_vector_text(T);
@@ -492,16 +515,13 @@ void write_text(UL_TEXT T)
 }
 
 
-
 //------------------------------------------------------
 // write UL circle
 //------------------------------------------------------
 void write_circle(UL_CIRCLE C)
 {
 	if (g_used_layers[C.layer]==0)
-	{
-	 return;
-	}
+	{ return; }
 	svgWriteCircle(C.x, C.y, C.radius, C.width, C.layer);
 }
 
@@ -510,12 +530,116 @@ void write_circle(UL_CIRCLE C)
 // write drillsymbol
 //------------------------------------------------------
 void write_drill(int x, int y, int drill, int layer)
-{
+{	
 	if (g_used_layers[layer]==0)
+	{ return; }
+	
+	string style = svgLineStyle(mm2u(0.0254), CAP_ROUND);
+	int d = mm2u(1.02);
+	int r = mm2u(0.99);
+	
+	svgWritePathStart(layer, style);
+	//TODO: Replace with rotations
+	switch (drill)
 	{
-	  return;
+		case 1:
+			svgWritePathLine(x-d, y, x+d, y);
+			svgWritePathLine(x, y-d, x, y+d);
+			break;
+		case 2:
+			svgWritePathLine(x-d, y-d, x+d, y+d);
+			svgWritePathLine(x-d, y+d, x+d, y-d);
+			break;
+		case 3:
+			svgWritePathLine(x-d, y-d, x-d, y+d);
+			svgWritePathLine(x+d, y-d, x+d, y+d);
+			svgWritePathLine(x-d, y-d, x+d, y-d);
+			svgWritePathLine(x-d, y+d, x+d, y+d);
+			svgWritePathLine(x, y, x, y+d);
+			break;
+		case 4:
+			svgWritePathLine(x-d, y, x, y-d);
+			svgWritePathLine(x+d, y, x, y+d);
+			svgWritePathLine(x, y-d, x+d, y);
+			svgWritePathLine(x, y+d, x-d, y);
+			svgWritePathLine(x, y, x, y+d);
+			break;
+		case 5:
+			svgWritePathLine(x-d, y-d, x+d, y+d);
+			svgWritePathLine(x-d, y+d, x+d, y-d);
+			svgWritePathLine(x-d, y-d, x+d, y-d);
+			svgWritePathLine(x-d, y+d, x+d, y+d);
+			break;
+		case 6:
+			svgWritePathLine(x-d, y-d, x+d, y+d);
+			svgWritePathLine(x-d, y+d, x+d, y-d);
+			svgWritePathLine(x-d, y-d, x-d, y+d);
+			svgWritePathLine(x+d, y-d, x+d, y+d);
+			break;
+		case 7:
+			svgWritePathLine(x-d, y, x+d, y);
+			svgWritePathLine(x, y-d, x, y+d);
+			svgWritePathLine(x-d, y, x, y-d);
+			svgWritePathLine(x+d, y, x, y+d);
+			break;
+		case 8:
+			svgWritePathLine(x-d, y, x+d, y);
+			svgWritePathLine(x, y-d, x, y+d);
+			svgWritePathLine(x, y-d, x+d, y);
+			svgWritePathLine(x, y+d, x-d, y);
+			break;
+		case 9:
+			svgWritePathLine(x-d, y-d, x+d, y+d);
+			svgWritePathLine(x-d, y+d, x+d, y-d);
+			svgWritePathLine(x, y+d, x, y-d);
+			break;
+		case 10:
+			svgWritePathLine(x-d, y-d, x+d, y+d);
+			svgWritePathLine(x-d, y+d, x+d, y-d);
+			svgWritePathLine(x-d, y, x+d, y);
+			break;
+		case 11:
+			svgWritePathLine(x-d, y+d, x+d, y+d);
+			svgWritePathLine(x+d, y+d, x, y);
+			svgWritePathLine(x-d, y+d, x, y);
+			svgWritePathLine(x, y, x, y-d);
+			break;
+		case 12:
+			svgWritePathLine(x-d, y-d, x+d, y-d);
+			svgWritePathLine(x+d, y-d, x, y);
+			svgWritePathLine(x-d, y-d, x, y);
+			svgWritePathLine(x, y, x, y+d);
+			break;
+		case 13:
+			svgWritePathLine(x+d, y+d, x+d, y-d);
+			svgWritePathLine(x+d, y+d, x, y);
+			svgWritePathLine(x+d, y-d, x, y);
+			svgWritePathLine(x-d, y, x, y);
+			break;
+		case 14:
+			svgWritePathLine(x-d, y+d, x-d, y-d);
+			svgWritePathLine(x-d, y+d, x, y);
+			svgWritePathLine(x-d, y-d, x, y);
+			svgWritePathLine(x, y, x+d, y);
+			break;
+		case 15:
+			svgWritePathLine(x-d, y, x+d, y);
+			svgWritePathLine(x, y-d, x, y+d);
+			svgWritePathArc(x-d, y-1, x-d, y+1, r, '1');
+			break;
+		case 16:
+			svgWritePathLine(x-d, y, x+d, y);
+			svgWritePathLine(x, y-d, x, y+d);
+			svgWritePathArc(x-d, y-1, x-d, y+1, r, '1');
+			svgWritePathArc(x-d/2, y-1, x-d/2, y+1, r/2, '1');
+			break;
+		case 0:
+			svgWritePathLine(x-d, y-d, x+d, y+d);
+			svgWritePathArc(x-d, y-1, x-d, y+1, r, '1');
+			break;
+			
 	}
-	svgWriteDot(x, y, drill, layer);
+	svgWritePathEnd();
 }
 
 //------------------------------------------------------
@@ -523,11 +647,6 @@ void write_drill(int x, int y, int drill, int layer)
 //------------------------------------------------------
 void write_restring(int x, int y, int diameter, int shape, int long, real angle, int layer)
 {
-	if (g_used_layers[layer]==0)
-	{
-		return;
-	}
-
 	switch(shape)
 	{
 	case PAD_SHAPE_SQUARE:
@@ -557,17 +676,29 @@ void write_pad(UL_PAD P)
 	int layer;
 	if (P.flags&PAD_FLAG_STOP)
 	{
-		write_restring(P.x, P.y, P.diameter[LAYER_TSTOP], P.shape[LAYER_TSTOP], 100+P.elongation, P.angle, LAYER_TSTOP);
-		write_restring(P.x, P.y, P.diameter[LAYER_BSTOP], P.shape[LAYER_BSTOP], 100+P.elongation, P.angle, LAYER_BSTOP);
+		if (g_used_layers[LAYER_TSTOP])
+		{ write_restring(P.x, P.y, P.diameter[LAYER_TSTOP], P.shape[LAYER_TSTOP], 100+P.elongation, P.angle, LAYER_TSTOP); }
+		if (g_used_layers[LAYER_BSTOP])
+		{ write_restring(P.x, P.y, P.diameter[LAYER_BSTOP], P.shape[LAYER_BSTOP], 100+P.elongation, P.angle, LAYER_BSTOP); }
 	}
-	for (layer=LAYER_TOP; layer<=LAYER_BOTTOM; ++layer)
+	for (layer=LAYER_TOP; layer<=LAYER_BOTTOM ; ++layer)
 	{
 		if (g_used_layers[layer])
 		{
 			write_restring(P.x, P.y, P.diameter[layer], P.shape[layer], 100+P.elongation, P.angle, layer);
 		}
 	}
-	write_drill(P.x, P.y, P.drill, LAYER_DRILLS);
+	if (g_used_layers[LAYER_PADS])
+	{
+		int diameter = P.diameter[LAYER_PADS];
+		//Hack for pads layer
+		if (diameter == 0)
+		{ diameter = P.diameter[LAYER_TOP]; }
+		write_restring(P.x, P.y, diameter, P.shape[layer], 100+P.elongation, P.angle, layer);
+		
+		svgWriteDot(P.x, P.y, P.drill, 0);
+	}
+	write_drill(P.x, P.y, P.drillsymbol, LAYER_DRILLS);
 }
 
 
@@ -578,27 +709,26 @@ void write_smd(UL_SMD S)
 {
 	if (S.layer==LAYER_TOP)
 	{
-		if (S.flags & SMD_FLAG_STOP)
-		{
-			svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_TSTOP], S.dy[LAYER_TSTOP], S.roundness, S.angle, LAYER_TSTOP);
-		}
-		if (S.flags & SMD_FLAG_CREAM)
-		{
-			svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_TCREAM], S.dy[LAYER_TCREAM], S.roundness, S.angle, LAYER_TCREAM);
-		}  
-		svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_TOP], S.dy[LAYER_TOP], S.roundness, S.angle, LAYER_TOP);
+		if (g_used_layers[LAYER_TOP])
+		{ svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_TOP], S.dy[LAYER_TOP], S.roundness, S.angle, LAYER_TOP); }
+		
+		if (g_used_layers[LAYER_TSTOP])
+		{ svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_TSTOP], S.dy[LAYER_TSTOP], S.roundness, S.angle, LAYER_TSTOP); }
+		
+		if (g_used_layers[LAYER_TCREAM])
+		{ svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_TCREAM], S.dy[LAYER_TCREAM], S.roundness, S.angle, LAYER_TCREAM); }
 	}
+	
 	else if (S.layer==LAYER_BOTTOM)
 	{
-		if (S.flags & SMD_FLAG_STOP)
-		{
-			svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_BSTOP], S.dy[LAYER_BSTOP], S.roundness, S.angle, LAYER_BSTOP);
-		}
-		if (S.flags & SMD_FLAG_CREAM)
-		{
-			svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_BCREAM], S.dy[LAYER_BCREAM], S.roundness, S.angle, LAYER_BCREAM);
-		}    
-		svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_BOTTOM], S.dy[LAYER_BOTTOM], S.roundness, S.angle, LAYER_BOTTOM);
+		if (g_used_layers[LAYER_BCREAM])
+		{ svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_BCREAM], S.dy[LAYER_BCREAM], S.roundness, S.angle, LAYER_BCREAM); }
+		
+		if (g_used_layers[LAYER_BSTOP])
+		{ svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_BSTOP], S.dy[LAYER_BSTOP], S.roundness, S.angle, LAYER_BSTOP); }
+		
+		if (g_used_layers[LAYER_BOTTOM])
+		{ svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_BOTTOM], S.dy[LAYER_BOTTOM], S.roundness, S.angle, LAYER_BOTTOM); }
 	}
 }
 
@@ -611,8 +741,10 @@ void write_via(UL_VIA V)
 	int layer;
 	if (V.flags&VIA_FLAG_STOP)
 	{
-		write_restring(V.x, V.y, V.diameter[LAYER_TSTOP], V.shape[LAYER_TSTOP], 100, 0.0, LAYER_TSTOP);
-		write_restring(V.x, V.y, V.diameter[LAYER_BSTOP], V.shape[LAYER_BSTOP], 100, 0.0, LAYER_BSTOP);
+		if (g_used_layers[LAYER_TSTOP])
+		{ write_restring(V.x, V.y, V.diameter[LAYER_TSTOP], V.shape[LAYER_TSTOP], 100, 0.0, LAYER_TSTOP); }
+		if (g_used_layers[LAYER_BSTOP])
+		{ write_restring(V.x, V.y, V.diameter[LAYER_BSTOP], V.shape[LAYER_BSTOP], 100, 0.0, LAYER_BSTOP); }
 	}
 	for (layer=V.start; layer<=V.end; ++layer)
 	{
@@ -621,7 +753,11 @@ void write_via(UL_VIA V)
 			write_restring(V.x, V.y, V.diameter[layer], V.shape[layer], 100, 0.0, layer);
 		}
 	}
-	write_drill(V.x, V.y, V.drill, LAYER_DRILLS);
+	
+	if (g_used_layers[LAYER_VIAS])
+	{ svgWriteDot(V.x, V.y, V.drill, 0); }
+	
+	write_drill(V.x, V.y, V.drillsymbol, LAYER_DRILLS);
 }
 
 
@@ -629,9 +765,9 @@ void write_via(UL_VIA V)
 // write UL hole
 //------------------------------------------------------
 void write_hole(UL_HOLE H)
-{ 
-	svgWriteCircle(H.x, H.y, H.drill/2, 1, LAYER_DIMENSION);
-	write_drill(H.x, H.y, H.drill, LAYER_HOLES);
+{
+	svgWriteCircle(H.x, H.y, H.drill/2, zero_width, LAYER_DIMENSION);
+	write_drill(H.x, H.y, H.drillsymbol, LAYER_HOLES);
 }
 
 
@@ -695,9 +831,7 @@ void write_polygon(UL_POLYGON P)
 void write_filled_polygon(UL_POLYGON P)
 {
 	if (g_used_layers[P.layer]==0)
-	{
-		return;
-	}
+		{ return; }
 	string style;
 	int first=1;
 
@@ -709,11 +843,11 @@ void write_filled_polygon(UL_POLYGON P)
 			svgWritePathStart(P.layer, style);
 			first=0;
 		}
-		svgWritePathSegment(W.x1, W.y1, W.x2, W.y2);
+		svgWritePathLine(W.x1, W.y1, W.x2, W.y2);
 	}
 	P.fillings(W)
 	{
-		svgWritePathSegment(W.x1, W.y1, W.x2, W.y2);
+		svgWritePathLine(W.x1, W.y1, W.x2, W.y2);
 	}
 	svgWritePathEnd();
 }
@@ -725,10 +859,7 @@ void write_filled_polygon(UL_POLYGON P)
 void write_bus(UL_BUS B)
 {
 	printf("<g><title>BUS %s</title>\n", encodeText(B.name));
-	B.segments(SEG)
-	{
-		write_segment(SEG);
-	}
+	B.segments(SEG) { write_segment(SEG); }
 	printf("</g>\n");
 }
 
@@ -739,10 +870,7 @@ void write_bus(UL_BUS B)
 void write_net(UL_NET N)
 {
 	printf("<g><title>NET %s</title>\n", encodeText(N.name));
-	N.segments(SEG)
-	{
-		write_segment(SEG);
-	}
+	N.segments(SEG) { write_segment(SEG); }
 	printf("</g>\n");
 }
 
@@ -851,7 +979,39 @@ void write_element(UL_ELEMENT E)
 	printf("<g><title>PART %s</title>\n", encodeText(E.name));  
 	E.texts(T) {write_text(T);}
 	write_package(E.package);
-	printf("</g>\n");      
+	printf("</g>\n");
+}
+
+//------------------------------------------------------
+//write UL dimension
+//------------------------------------------------------
+void write_dimension(UL_DIMENSION D)
+{
+	if (g_used_layers[D.layer] == 0)// && D.layer != layer)
+	{ return; }
+	
+	printf("<g><title>DIMENSION</title>\n");
+	D.texts(T)
+	{
+		write_text(T);
+	}
+	
+	int cnt = 0;
+	D.wires(W)
+	{
+		if (cnt==0)
+		{
+			string style = svgLineStyle(W.width, W.cap);
+			svgWritePathStart(D.layer, style);
+		}
+		write_wire_segment(W);
+		cnt++;
+		//write_wire(W);
+	}
+	if (cnt>0)
+	{ svgWritePathEnd(); }
+	
+	printf("</g>\n"); 
 }
 
 
@@ -861,10 +1021,18 @@ void write_element(UL_ELEMENT E)
 void write_svg_layerStyle (UL_LAYER L)
 {
 	string color;
-	if (g_monochrome && L.color!=15) //White should stay white
+	
+	//Mimic Eagle behavior
+	
+	if (g_monochrome)
 		color = htmlcolor(0);
 	else
 		color = htmlcolor(palette(L.color)&0x00ffffff);
+		
+	if (L.color==15) //White turns black
+		color = htmlcolor(0);
+		
+	
 	
 	printf ("path.l%d {stroke:%s; fill:none; }\n", L.number, color);
 	printf ("line.l%d {stroke:%s; fill:none; }\n", L.number, color);
@@ -888,6 +1056,7 @@ void write_sheet_styles()
 				write_svg_layerStyle(L);
 		}
 	}
+	
 	printf ("]]>\n");
 	printf ("</style>\n");
 	printf ("</defs>\n");
@@ -988,7 +1157,7 @@ void update_used_board_layers(UL_BOARD B)
 		{
 			used &= L.visible;
 		}
-		g_used_layers[L.number]=used;    
+		g_used_layers[L.number]=used;
 	}
 }
 
@@ -1008,6 +1177,10 @@ void write_board_styles()
 				write_svg_layerStyle(L);
 		}
 	}
+	
+	//write background style
+	printf ("circle.j%d {fill:%s; }\n", 0, htmlcolor(palette(15)&0x00ffffff));
+	
 	printf ("]]>\n");
 	printf ("</style>\n");
 	printf ("</defs>\n");
@@ -1030,7 +1203,7 @@ void write_board_header(UL_BOARD B)
 	printf(header, u2mm(dimX), u2mm(dimY), u2mm(B.area.x1), u2mm(-B.area.y2), u2mm(dimX), u2mm(dimY));
 
 	printf("<title>%s</title>\n", encodeText(B.name));
-	printf("<desc>generated by eagle2svg %.1f, developed by http://www.nicai-systems.de</desc>\n", VERSION);
+	printf("<desc>generated by eagle2svg %.1f, %s</desc>\n", VERSION, DESCR);
 
 	write_board_styles();
 	printf ("<g id='surface0'>\n");
@@ -1061,15 +1234,21 @@ void write_svg_board(string fileName)
 			{
 				update_used_board_layers(B);
 				write_board_header(B);
-				      
-				B.texts(T)      {write_text(T);}
-				B.circles(C)    {write_circle(C);}
-				B.rectangles(R) {write_rectangle(R);}
-				B.polygons(P)   {write_filled_polygon(P);}
-				B.signals(S)    {write_signal(S);} 
-				B.wires(W)      {write_wire(W);}
-				B.elements(E)   {write_element(E);}
-				B.holes(H)      {write_hole(H);}
+				
+				//B.layers(L)
+				{
+					//current_layer = L.number;
+					
+					B.texts(T)      {write_text(T);}
+					B.circles(C)    {write_circle(C);}
+					B.rectangles(R) {write_rectangle(R);}
+					B.polygons(P)   {write_filled_polygon(P);}
+					B.signals(S)    {write_signal(S);} 
+					B.wires(W)      {write_wire(W);}
+					B.elements(E)   {write_element(E);}
+					B.holes(H)      {write_hole(H);}
+					B.dimensions(D) {write_dimension(D);}
+				}
 
 				write_board_footer(B);
 			}
@@ -1081,7 +1260,7 @@ void write_svg_board(string fileName)
 //------------------------------------------------------
 // Global mod_ and lib_name
 //------------------------------------------------------
-string sch_name ;   
+string sch_name;   
 
 
 //------------------------------------------------------
@@ -1142,7 +1321,7 @@ int displayDialog(string titleStr)
 					}
 				}
 				dlgStretch(10);
-				dlgLabel("developed by xTitoris, based on eagle2svg by nils.springob@nicai-systems.de");
+				dlgLabel("developed by xtitoris@gmail.com, based on eagle2svg by nils.springob@nicai-systems.de");
 			}
 			dlgStretch(0);
 			dlgHBoxLayout
