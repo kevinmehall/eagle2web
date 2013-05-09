@@ -36,7 +36,7 @@ int current_layer = 0;
 int g_monochrome = 0;
 int g_only_visible = 1;
 int g_used_layers[];
-int zero_width = 1600;
+int zero_width = 8000;
 
 //------------------------------------------------------
 // generate html color code  
@@ -1031,11 +1031,6 @@ void write_svg_layerStyle (UL_LAYER L)
 		color = htmlcolor(0);
 	else
 		color = htmlcolor(palette(L.color)&0x00ffffff);
-		
-	if (L.color==15) //White turns black
-		color = htmlcolor(0);
-		
-	
 	
 	printf ("path.l%d {stroke:%s; fill:none; }\n", L.number, color);
 	printf ("line.l%d {stroke:%s; fill:none; }\n", L.number, color);
