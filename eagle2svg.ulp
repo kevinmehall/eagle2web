@@ -122,8 +122,7 @@ string svgTransform(int x, int y, real angle)
 
 void svgWriteLine(int x1, int y1, int x2, int y2, int layer, string style)
 {
-	printf("<line class='l%d' x1='%f' y1='%f' x2='%f' y2='%f' style='%s'/>\n",
-	layer,
+	printf("<line x1='%f' y1='%f' x2='%f' y2='%f' style='%s'/>\n",
 	u2mm(x1), u2mm(-y1), 
 	u2mm(x2), u2mm(-y2),
 	style);
@@ -131,8 +130,7 @@ void svgWriteLine(int x1, int y1, int x2, int y2, int layer, string style)
 
 void svgWriteArc(int x1, int y1, int x2, int y2, int radius, char longpath, int layer, string style)
 {
-	printf("<path class='l%d' d='M %f,%f A %f %f 0 %c 0 %f,%f' style='%s'/>\n",
-	layer,
+	printf("<path d='M %f,%f A %f %f 0 %c 0 %f,%f' style='%s'/>\n",
 	u2mm(x1), u2mm(-y1),
 	u2mm(radius), u2mm(radius),
 	longpath,
@@ -150,8 +148,7 @@ void svgWriteRect(int x1, int y1, int x2, int y2, real angle, int layer)
 		-angle, 
 		u2mm(x1+x2)/2.0, u2mm(-y1-y2)/2.0);
 	}   
-	printf("<rect class='l%d' x='%f' y='%f' width='%f' height='%f'%s/>\n",
-	layer,
+	printf("<rect x='%f' y='%f' width='%f' height='%f'%s/>\n",
 	u2mm(x1), u2mm(-y2), 
 	u2mm(x2-x1), u2mm(y2-y1),
 	rotation);
@@ -161,8 +158,7 @@ void svgWriteRectCenter(int x, int y, int dx, int dy, real angle, int layer)
 {
 	string rotation = svgTransform(x, y, angle);
 
-	printf("<rect class='l%d' x='%f' y='%f' width='%f' height='%f' %s/>\n",
-	layer,
+	printf("<rect x='%f' y='%f' width='%f' height='%f' %s/>\n",
 	u2mm(-dx/2), u2mm(-dy/2), 
 	u2mm(dx), u2mm(dy),
 	rotation);
@@ -177,8 +173,7 @@ void svgWriteOctCenter(int x, int y, int dx, int dy, real angle, int layer)
 	real x2 = u2mm(dx)/(2*(1+1.414213562));
 	real y2 = u2mm(dy)/(2*(1+1.414213562)); 
 
-	printf("<polygon class='l%d' points='%f %f, %f %f, %f %f, %f %f, %f %f, %f %f, %f %f, %f %f' %s/>\n",
-	layer,
+	printf("<polygon points='%f %f, %f %f, %f %f, %f %f, %f %f, %f %f, %f %f, %f %f' %s/>\n",
 	-x1, -y2, 
 	-x2, -y1, 
 	x2, -y1, 
@@ -203,8 +198,7 @@ void svgWriteRoundRectCenter(int x, int y, int w, int h, int roundness, real ang
 	else
 		{ roundness = h*roundness/200; }
 
-	printf("<rect class='l%d' x='%f' y='%f' width='%f' height='%f' rx='%f' %s/>\n",
-	layer,
+	printf("<rect x='%f' y='%f' width='%f' height='%f' rx='%f' %s/>\n",
 	u2mm(-w/2), u2mm(-h/2), 
 	u2mm(w), u2mm(h),
 	u2mm(roundness),
@@ -213,8 +207,8 @@ void svgWriteRoundRectCenter(int x, int y, int w, int h, int roundness, real ang
 
 void svgWriteDot(int x, int y, int diameter, int layer)
 {
-	printf("<circle class='j%d' cx='%f' cy='%f' r='%f'/>\n", 
-	layer,
+	printf("<circle class='%s' cx='%f' cy='%f' r='%f'/>\n", 
+	layer==0?"bdot":"dot",
 	u2mm(x), u2mm(-y),
 	u2mm(diameter)/2.0);
 }
@@ -226,8 +220,7 @@ void svgWriteCircle(int x, int y, int radius, int lwidth, int layer)
 		svgWriteDot(x, y, 2*radius, layer);
 		return;
 	}
-	printf("<circle class='l%d' cx='%f' cy='%f' r='%f' style='stroke-width:%f'/>\n", 
-	layer,
+	printf("<circle cx='%f' cy='%f' r='%f' style='stroke-width:%f'/>\n", 
 	u2mm(x), u2mm(-y),
 	u2mm(radius), 
 	u2mm(lwidth));
@@ -264,8 +257,7 @@ void svgWriteText(string text, int x, int y, real angle, int size, int align, in
 	if (dy!=0)
 	{ sprintf(trn2," translate(0, %f)", u2mm(dy)); }
 	
-	printf( "<text class='l%d' style='%s' transform='%s%s%s%s'>%s</text>\n",
-	layer,
+	printf( "<text style='%s' transform='%s%s%s%s'>%s</text>\n",
 	style,
 	trn1, rot, scl, trn2,
 	text);
@@ -274,7 +266,7 @@ void svgWriteText(string text, int x, int y, real angle, int size, int align, in
 
 void svgWritePathStart(int layer, string style)
 {
-	printf( "<path class='l%d' style='%s' d='", layer, style);
+	printf( "<path style='%s' d='", style);
 }
 
 void svgWritePathLine(int x1, int y1, int x2, int y2)
@@ -825,7 +817,7 @@ void write_polygon(UL_POLYGON P)
 		return;
 	}
 	int count = 0;
-	printf( "<polygon class='l%d' points='", P.layer);
+	printf( "<polygon points='");
 
 	P.wires(W)
 	{
@@ -1051,13 +1043,13 @@ void write_svg_layerStyle (UL_LAYER L)
 	else
 		color = htmlcolor(palette(L.color)&0x00ffffff);
 	
-	printf ("path.l%d {stroke:%s; fill:none; }\n", L.number, color);
-	printf ("line.l%d {stroke:%s; fill:none; }\n", L.number, color);
-	printf ("circle.l%d {stroke:%s; fill:none; }\n", L.number, color);
-	printf ("circle.j%d {fill:%s; }\n", L.number, color);
-	printf ("rect.l%d {fill:%s; }\n", L.number, color);
-	printf ("text.l%d {font-family:sans-serif; fill:%s; }\n", L.number, color);
-	printf ("polygon.l%d {fill:%s; }\n", L.number, color);
+	printf ("#layer%d path {stroke:%s; fill:none; }\n", L.number, color);
+	printf ("#layer%d line {stroke:%s; fill:none; }\n", L.number, color);
+	printf ("#layer%d circle {stroke:%s; fill:none; }\n", L.number, color);
+	printf ("#layer%d circle.dot {fill:%s; stroke:none}\n", L.number, color);
+	printf ("#layer%d rect {fill:%s; }\n", L.number, color);
+	printf ("#layer%d text {font-family:sans-serif; fill:%s; }\n", L.number, color);
+	printf ("#layer%d polygon {fill:%s; }\n", L.number, color);
 }
 
 void write_sheet_styles()
@@ -1197,13 +1189,13 @@ void write_board_styles()
 	
 	printf("svg{ background: black;}");
 	printf("g.layer{opacity:0.8;}");
-	printf("line.selectedSignal, path.selectedSignal{stroke: yellow;}");
-	printf("rect.selectedSignal, circle.selectedSignal, polygon.selectedSignal{fill: yellow;}");
+	printf("#viewport line.selectedSignal, #viewport path.selectedSignal{stroke: yellow;}");
+	printf("#viewport rect.selectedSignal, #viewport circle.selectedSignal, #viewport polygon.selectedSignal{fill: yellow;}");
 
 	printf(".layer-other{pointer-events: none;}");
 
 	//write background style
-	printf ("circle.j%d {fill:%s; }\n", 0, htmlcolor(palette(0)&0x00ffffff));
+	printf ("#viewport circle.bdot {fill:%s; stroke:none;}\n", htmlcolor(palette(0)&0x00ffffff));
 	
 	printf ("]]>\n");
 	printf ("</style>\n");
