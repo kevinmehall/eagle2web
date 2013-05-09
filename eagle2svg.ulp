@@ -1197,8 +1197,10 @@ void write_board_styles()
 	
 	printf("svg{ background: black;}");
 	printf("g.layer{opacity:0.8;}");
-	printf("line.selectedSignal{stroke: yellow;}");
-	printf("rect.selectedSignal, path.selectedSignal, circle.selectedSignal{fill: yellow;}");
+	printf("line.selectedSignal, path.selectedSignal{stroke: yellow;}");
+	printf("rect.selectedSignal, circle.selectedSignal, polygon.selectedSignal{fill: yellow;}");
+
+	printf(".layer-other{pointer-events: none;}");
 
 	//write background style
 	printf ("circle.j%d {fill:%s; }\n", 0, htmlcolor(palette(0)&0x00ffffff));
@@ -1247,7 +1249,12 @@ void write_board_footer(UL_BOARD B)
 
 
 void write_svg_board_layer(UL_BOARD B, int layerNum, string layerName){
-	printf("<g class='layer' data-layer-name='%s'>\n", encodeText(layerName));
+	string class2 = "layer-other";
+	if (layerNum >= LAYER_TOP && layerNum <= LAYER_BOTTOM){
+		class2 = "layer-signal";
+	}
+
+	printf("<g class='layer %s' id='layer%d' data-layer-name='%s'>\n", class2, layerNum, encodeText(layerName));
 	current_layer = layerNum;
 
 	B.texts(T)      {write_text(T);}
