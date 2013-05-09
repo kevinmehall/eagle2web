@@ -95,6 +95,8 @@ function setupHandlers(root){
 		"onmousedown" : "handleMouseDown(evt)",
 		"onmousemove" : "handleMouseMove(evt)",
 		//"onmouseout" : "handleMouseUp(evt)", // Decomment this to stop the pan functionality when dragging out of the SVG element
+		"width" : "100%",
+		"height": "100%",
 	});
 
 	if(navigator.userAgent.toLowerCase().indexOf('webkit') >= 0)
