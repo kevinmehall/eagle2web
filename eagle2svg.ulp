@@ -32,7 +32,7 @@ string DESCR	= "";
  *          Version 2.
  * ==========================================================================*/  
 
-
+int current_layer = 0;
 int g_monochrome = 0;
 int g_only_visible = 1;
 int g_used_layers[];
@@ -302,7 +302,7 @@ void svgWritePathEnd()
 //------------------------------------------------------
 void write_piece(UL_WIRE W)
 {
-	if (g_used_layers[W.layer]==0)
+	if (W.layer != current_layer)
 	{ return; }
 
 	string style = svgLineStyle(W.width, W.cap);
@@ -331,7 +331,7 @@ void write_piece(UL_WIRE W)
 //------------------------------------------------------
 void write_piece_segment(UL_WIRE W)
 {
-	if (g_used_layers[W.layer]==0)
+	if (W.layer != current_layer)
 	{ return; }
 	
 	if (W.arc)
@@ -355,7 +355,7 @@ void write_piece_segment(UL_WIRE W)
 //------------------------------------------------------
 void write_wire(UL_WIRE W)
 {
-	if (g_used_layers[W.layer]==0)
+	if (W.layer != current_layer)
 	{ return; }
 
 	if ( W.style == WIRE_STYLE_LONGDASH || W.style == WIRE_STYLE_SHORTDASH || W.style == WIRE_STYLE_DASHDOT )
@@ -391,7 +391,7 @@ void write_wire(UL_WIRE W)
 //------------------------------------------------------
 void write_wire_segment(UL_WIRE W)
 {
-	if (g_used_layers[W.layer]==0)
+	if (W.layer != current_layer)
 	{ return; }
 
 	if ( W.style == WIRE_STYLE_LONGDASH || W.style == WIRE_STYLE_SHORTDASH || W.style == WIRE_STYLE_DASHDOT )
@@ -420,7 +420,7 @@ void write_wire_segment(UL_WIRE W)
 //------------------------------------------------------
 void write_rectangle(UL_RECTANGLE R)
 {
-	if (g_used_layers[R.layer]==0)
+	if (R.layer != current_layer)
 	{ return; }
 	svgWriteRect(R.x1, R.y1, R.x2, R.y2, R.angle, R.layer);
 }
@@ -501,7 +501,7 @@ void write_prop_text(UL_TEXT T)
 //------------------------------------------------------
 void write_text(UL_TEXT T)
 {
-	if (g_used_layers[T.layer] == 0)// && (current_layer != 0 || T.layer != current_layer))
+	if (T.layer != current_layer)// && (current_layer != 0 || T.layer != current_layer))
 	{ return; }
 	
 	if (T.font==FONT_VECTOR)
@@ -520,7 +520,7 @@ void write_text(UL_TEXT T)
 //------------------------------------------------------
 void write_circle(UL_CIRCLE C)
 {
-	if (g_used_layers[C.layer]==0)
+	if (C.layer != current_layer)
 	{ return; }
 	svgWriteCircle(C.x, C.y, C.radius, C.width, C.layer);
 }
@@ -531,7 +531,7 @@ void write_circle(UL_CIRCLE C)
 //------------------------------------------------------
 void write_drill(int x, int y, int drill, int layer)
 {	
-	if (g_used_layers[layer]==0)
+	if (current_layer == layer)
 	{ return; }
 	
 	string style = svgLineStyle(mm2u(0.0254), CAP_ROUND);
@@ -676,19 +676,19 @@ void write_pad(UL_PAD P)
 	int layer;
 	if (P.flags&PAD_FLAG_STOP)
 	{
-		if (g_used_layers[LAYER_TSTOP])
+		if (current_layer == LAYER_TSTOP)
 		{ write_restring(P.x, P.y, P.diameter[LAYER_TSTOP], P.shape[LAYER_TSTOP], 100+P.elongation, P.angle, LAYER_TSTOP); }
-		if (g_used_layers[LAYER_BSTOP])
+		if (current_layer == LAYER_BSTOP)
 		{ write_restring(P.x, P.y, P.diameter[LAYER_BSTOP], P.shape[LAYER_BSTOP], 100+P.elongation, P.angle, LAYER_BSTOP); }
 	}
 	for (layer=LAYER_TOP; layer<=LAYER_BOTTOM ; ++layer)
 	{
-		if (g_used_layers[layer])
+		if (current_layer == layer)
 		{
 			write_restring(P.x, P.y, P.diameter[layer], P.shape[layer], 100+P.elongation, P.angle, layer);
 		}
 	}
-	if (g_used_layers[LAYER_PADS])
+	if (current_layer == LAYER_PADS)
 	{
 		int diameter = P.diameter[LAYER_PADS];
 		//Hack for pads layer
@@ -698,7 +698,9 @@ void write_pad(UL_PAD P)
 		
 		svgWriteDot(P.x, P.y, P.drill, 0);
 	}
-	write_drill(P.x, P.y, P.drillsymbol, LAYER_DRILLS);
+	if (current_layer == LAYER_DRILLS){
+		write_drill(P.x, P.y, P.drillsymbol, LAYER_DRILLS);
+	}
 }
 
 
@@ -709,25 +711,25 @@ void write_smd(UL_SMD S)
 {
 	if (S.layer==LAYER_TOP)
 	{
-		if (g_used_layers[LAYER_TOP])
+		if (current_layer == LAYER_TOP)
 		{ svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_TOP], S.dy[LAYER_TOP], S.roundness, S.angle, LAYER_TOP); }
 		
-		if (g_used_layers[LAYER_TSTOP])
+		if (current_layer == LAYER_TSTOP)
 		{ svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_TSTOP], S.dy[LAYER_TSTOP], S.roundness, S.angle, LAYER_TSTOP); }
 		
-		if (g_used_layers[LAYER_TCREAM])
+		if (current_layer == LAYER_TCREAM)
 		{ svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_TCREAM], S.dy[LAYER_TCREAM], S.roundness, S.angle, LAYER_TCREAM); }
 	}
 	
 	else if (S.layer==LAYER_BOTTOM)
 	{
-		if (g_used_layers[LAYER_BCREAM])
+		if (current_layer == LAYER_BCREAM)
 		{ svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_BCREAM], S.dy[LAYER_BCREAM], S.roundness, S.angle, LAYER_BCREAM); }
 		
-		if (g_used_layers[LAYER_BSTOP])
+		if (current_layer == LAYER_BSTOP)
 		{ svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_BSTOP], S.dy[LAYER_BSTOP], S.roundness, S.angle, LAYER_BSTOP); }
 		
-		if (g_used_layers[LAYER_BOTTOM])
+		if (current_layer == LAYER_BOTTOM)
 		{ svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_BOTTOM], S.dy[LAYER_BOTTOM], S.roundness, S.angle, LAYER_BOTTOM); }
 	}
 }
@@ -741,23 +743,24 @@ void write_via(UL_VIA V)
 	int layer;
 	if (V.flags&VIA_FLAG_STOP)
 	{
-		if (g_used_layers[LAYER_TSTOP])
+		if (current_layer == LAYER_TSTOP)
 		{ write_restring(V.x, V.y, V.diameter[LAYER_TSTOP], V.shape[LAYER_TSTOP], 100, 0.0, LAYER_TSTOP); }
-		if (g_used_layers[LAYER_BSTOP])
+		if (current_layer == LAYER_BSTOP)
 		{ write_restring(V.x, V.y, V.diameter[LAYER_BSTOP], V.shape[LAYER_BSTOP], 100, 0.0, LAYER_BSTOP); }
 	}
 	for (layer=V.start; layer<=V.end; ++layer)
 	{
-		if (g_used_layers[layer])
+		if (current_layer == layer)
 		{
 			write_restring(V.x, V.y, V.diameter[layer], V.shape[layer], 100, 0.0, layer);
 		}
 	}
 	
-	if (g_used_layers[LAYER_VIAS])
+	if (current_layer == LAYER_VIAS)
 	{ svgWriteDot(V.x, V.y, V.drill, 0); }
 	
-	write_drill(V.x, V.y, V.drillsymbol, LAYER_DRILLS);
+	if (current_layer == LAYER_DRILLS)
+	{write_drill(V.x, V.y, V.drillsymbol, LAYER_DRILLS);}
 }
 
 
@@ -800,7 +803,7 @@ void write_segment(UL_SEGMENT SEG)
 //------------------------------------------------------
 void write_polygon(UL_POLYGON P)
 {
-	if (g_used_layers[P.layer]==0)
+	if (P.layer != current_layer)
 	{
 		return;
 	}
@@ -830,7 +833,7 @@ void write_polygon(UL_POLYGON P)
 //------------------------------------------------------
 void write_filled_polygon(UL_POLYGON P)
 {
-	if (g_used_layers[P.layer]==0)
+	if (P.layer != current_layer)
 		{ return; }
 	string style;
 	int first=1;
@@ -987,7 +990,7 @@ void write_element(UL_ELEMENT E)
 //------------------------------------------------------
 void write_dimension(UL_DIMENSION D)
 {
-	if (g_used_layers[D.layer] == 0)// && D.layer != layer)
+	if (D.layer != current_layer)// && D.layer != layer)
 	{ return; }
 	
 	printf("<g><title>DIMENSION</title>\n");
@@ -1178,8 +1181,11 @@ void write_board_styles()
 		}
 	}
 	
+	printf("svg{ background: black;}");
+	printf("g.layer{opacity:0.8;}");
+
 	//write background style
-	printf ("circle.j%d {fill:%s; }\n", 0, htmlcolor(palette(15)&0x00ffffff));
+	printf ("circle.j%d {fill:%s; }\n", 0, htmlcolor(palette(0)&0x00ffffff));
 	
 	printf ("]]>\n");
 	printf ("</style>\n");
@@ -1221,6 +1227,24 @@ void write_board_footer(UL_BOARD B)
 }
 
 
+
+void write_svg_board_layer(UL_BOARD B, int layerNum, string layerName){
+	printf("<g class='layer' data-layer-name='%s'>\n", encodeText(layerName));
+	current_layer = layerNum;
+
+	B.texts(T)      {write_text(T);}
+	B.circles(C)    {write_circle(C);}
+	B.rectangles(R) {write_rectangle(R);}
+	B.polygons(P)   {write_filled_polygon(P);}
+	B.signals(S)    {write_signal(S);} 
+	B.wires(W)      {write_wire(W);}
+	B.elements(E)   {write_element(E);}
+	B.holes(H)      {write_hole(H);}
+	B.dimensions(D) {write_dimension(D);}
+	
+	printf("</g>\n");	
+}
+
 //------------------------------------------------------
 //write whole board 
 //------------------------------------------------------
@@ -1235,20 +1259,19 @@ void write_svg_board(string fileName)
 				update_used_board_layers(B);
 				write_board_header(B);
 				
+				write_svg_board_layer(B, LAYER_BOTTOM, "Bottom");
+				write_svg_board_layer(B, LAYER_BPLACE, "bPlace");
+				write_svg_board_layer(B, LAYER_BNAMES, "bNames");
+				write_svg_board_layer(B, LAYER_TOP, "Top");
+				write_svg_board_layer(B, LAYER_PADS, "Pads");
+				write_svg_board_layer(B, LAYER_VIAS, "Vias");
+				write_svg_board_layer(B, LAYER_TPLACE, "tPlace");
+				write_svg_board_layer(B, LAYER_TNAMES, "tNames");
+				write_svg_board_layer(B, LAYER_DOCUMENT, "Document");
+				write_svg_board_layer(B, LAYER_REFERENCE, "Reference");
+				write_svg_board_layer(B, LAYER_DIMENSION, "Dimension");
+
 				//B.layers(L)
-				{
-					//current_layer = L.number;
-					
-					B.texts(T)      {write_text(T);}
-					B.circles(C)    {write_circle(C);}
-					B.rectangles(R) {write_rectangle(R);}
-					B.polygons(P)   {write_filled_polygon(P);}
-					B.signals(S)    {write_signal(S);} 
-					B.wires(W)      {write_wire(W);}
-					B.elements(E)   {write_element(E);}
-					B.holes(H)      {write_hole(H);}
-					B.dimensions(D) {write_dimension(D);}
-				}
 
 				write_board_footer(B);
 			}
