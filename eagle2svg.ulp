@@ -297,6 +297,19 @@ void svgWritePathEnd()
 }
 
 
+void write_start_signal(string signalName){
+	if (current_layer <= LAYER_BOTTOM){
+		printf("<g class='signal' data-name='%s'>", encodeText(signalName));
+	}
+}
+
+void write_end_signal(){
+	if (current_layer <= LAYER_BOTTOM){
+		printf("</g>");
+	}
+}
+
+
 //------------------------------------------------------
 // write UL piece
 //------------------------------------------------------
@@ -673,7 +686,6 @@ void write_restring(int x, int y, int diameter, int shape, int long, real angle,
 //------------------------------------------------------
 void write_pad(UL_PAD P)
 {
-	int layer;
 	if (P.flags&PAD_FLAG_STOP)
 	{
 		if (current_layer == LAYER_TSTOP)
@@ -681,12 +693,11 @@ void write_pad(UL_PAD P)
 		if (current_layer == LAYER_BSTOP)
 		{ write_restring(P.x, P.y, P.diameter[LAYER_BSTOP], P.shape[LAYER_BSTOP], 100+P.elongation, P.angle, LAYER_BSTOP); }
 	}
-	for (layer=LAYER_TOP; layer<=LAYER_BOTTOM ; ++layer)
+	if (current_layer >= LAYER_TOP && current_layer <= LAYER_BOTTOM)
 	{
-		if (current_layer == layer)
-		{
-			write_restring(P.x, P.y, P.diameter[layer], P.shape[layer], 100+P.elongation, P.angle, layer);
-		}
+		write_start_signal(P.signal);
+		write_restring(P.x, P.y, P.diameter[current_layer], P.shape[current_layer], 100+P.elongation, P.angle, current_layer);
+		write_end_signal();
 	}
 	if (current_layer == LAYER_PADS)
 	{
@@ -694,7 +705,7 @@ void write_pad(UL_PAD P)
 		//Hack for pads layer
 		if (diameter == 0)
 		{ diameter = P.diameter[LAYER_TOP]; }
-		write_restring(P.x, P.y, diameter, P.shape[layer], 100+P.elongation, P.angle, layer);
+		write_restring(P.x, P.y, diameter, P.shape[LAYER_TOP], 100+P.elongation, P.angle, LAYER_PADS);
 		
 		svgWriteDot(P.x, P.y, P.drill, 0);
 	}
@@ -709,6 +720,9 @@ void write_pad(UL_PAD P)
 //------------------------------------------------------
 void write_smd(UL_SMD S)
 {
+	if (current_layer == S.layer){
+		write_start_signal(S.signal);
+	}
 	if (S.layer==LAYER_TOP)
 	{
 		if (current_layer == LAYER_TOP)
@@ -731,6 +745,9 @@ void write_smd(UL_SMD S)
 		
 		if (current_layer == LAYER_BOTTOM)
 		{ svgWriteRoundRectCenter(S.x, S.y, S.dx[LAYER_BOTTOM], S.dy[LAYER_BOTTOM], S.roundness, S.angle, LAYER_BOTTOM); }
+	}
+	if (current_layer == S.layer){
+		write_end_signal();
 	}
 }
 
@@ -883,11 +900,11 @@ void write_net(UL_NET N)
 //------------------------------------------------------
 void write_signal(UL_SIGNAL S)
 {
-	printf("<g class='signal' data-name='%s'>", S.name);
+	write_start_signal(S.name);
 	S.polygons(P) {write_filled_polygon(P);}    
 	S.wires(W)    {write_wire(W);}
 	S.vias(V)     {write_via(V);}
-	printf("</g>");
+	write_end_signal();
 }
 
 
@@ -930,10 +947,10 @@ void write_gate(UL_GATE G)
 //------------------------------------------------------
 void write_instance(UL_INSTANCE I)
 {
-	printf("<g><title>PART %s</title>\n", encodeText(I.name));
+	//printf("<g><title>PART %s</title>\n", encodeText(I.name));
 	write_gate(I.gate);
 	I.texts(T) {write_text(T);}
-	printf("</g>\n");
+	//printf("</g>\n");
 }
 
 
@@ -954,14 +971,10 @@ void write_part(UL_PART P)
 //------------------------------------------------------
 void write_contact(UL_CONTACT C)
 {
-	printf("<g class='signal' data-name='%s'>", C.signal);
-
 	if (C.pad)
 		write_pad(C.pad);
 	else if (C.smd)
 		write_smd(C.smd);
-
-	printf("</g>");
 }
 
 
@@ -985,10 +998,10 @@ void write_package(UL_PACKAGE PKG)
 //------------------------------------------------------
 void write_element(UL_ELEMENT E)
 {
-	printf("<g><title>PART %s</title>\n", encodeText(E.name));  
+	//printf("<g><title>PART %s</title>\n", encodeText(E.name));  
 	E.texts(T) {write_text(T);}
 	write_package(E.package);
-	printf("</g>\n");
+	//printf("</g>\n");
 }
 
 //------------------------------------------------------
