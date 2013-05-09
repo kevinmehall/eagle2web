@@ -883,9 +883,11 @@ void write_net(UL_NET N)
 //------------------------------------------------------
 void write_signal(UL_SIGNAL S)
 {
+	printf("<g class='signal' data-name='%s'>", S.name);
 	S.polygons(P) {write_filled_polygon(P);}    
 	S.wires(W)    {write_wire(W);}
-	S.vias(V)     {write_via(V);}    
+	S.vias(V)     {write_via(V);}
+	printf("</g>");
 }
 
 
@@ -952,10 +954,14 @@ void write_part(UL_PART P)
 //------------------------------------------------------
 void write_contact(UL_CONTACT C)
 {
+	printf("<g class='signal' data-name='%s'>", C.signal);
+
 	if (C.pad)
 		write_pad(C.pad);
 	else if (C.smd)
 		write_smd(C.smd);
+
+	printf("</g>");
 }
 
 
@@ -1178,6 +1184,8 @@ void write_board_styles()
 	
 	printf("svg{ background: black;}");
 	printf("g.layer{opacity:0.8;}");
+	printf("line.selectedSignal{stroke: yellow;}");
+	printf("rect.selectedSignal, path.selectedSignal, circle.selectedSignal{fill: yellow;}");
 
 	//write background style
 	printf ("circle.j%d {fill:%s; }\n", 0, htmlcolor(palette(0)&0x00ffffff));
@@ -1208,6 +1216,7 @@ void write_board_header(UL_BOARD B)
 
 	write_board_styles();
 	printf("<script xlink:href='SVGPan.js'/>");
+	printf("<script xlink:href='eagleInteract.js'/>");
 	printf("<g id='viewport'>\n");
 }
 
