@@ -91,13 +91,12 @@ setupHandlers(root);
  */
 function setupHandlers(root){
 	setAttributes(root, {
-		"onmouseup" : "handleMouseUp(evt)",
-		"onmousedown" : "handleMouseDown(evt)",
-		"onmousemove" : "handleMouseMove(evt)",
-		//"onmouseout" : "handleMouseUp(evt)", // Decomment this to stop the pan functionality when dragging out of the SVG element
 		"width" : "100%",
 		"height": "100%",
 	});
+
+	root.addEventListener('mouseup', handleMouseUp);
+	root.addEventListener('mousedown', handleMouseDown);
 
 	if(navigator.userAgent.toLowerCase().indexOf('webkit') >= 0)
 		window.addEventListener('mousewheel', handleMouseWheel, false); // Chrome/Safari
@@ -238,8 +237,12 @@ function handleMouseMove(evt) {
  * Handle click event.
  */
 function handleMouseDown(evt) {
+	if (evt.button > 1) return;
+
 	if(evt.preventDefault)
 		evt.preventDefault();
+
+	root.addEventListener('mousemove', handleMouseMove);
 
 	evt.returnValue = false;
 
@@ -275,6 +278,8 @@ function handleMouseDown(evt) {
 function handleMouseUp(evt) {
 	if(evt.preventDefault)
 		evt.preventDefault();
+
+	root.removeEventListener('mousemove', handleMouseMove);
 
 	evt.returnValue = false;
 
