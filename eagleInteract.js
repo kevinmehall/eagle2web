@@ -2,6 +2,30 @@
 
 var svgRoot = document.documentElement
 
+var svg   = document.documentElement
+var svgNS = svg.namespaceURI
+var selectedSignalElem
+var defaultMessage = 'Click a signal'
+
+function addOverlay(){
+	getRoot(document)
+	selectedSignalElem = document.createElementNS(svgNS, 'text')
+	selectedSignalElem.setAttribute('x', 10)
+	selectedSignalElem.setAttribute('y', 20)
+	selectedSignalElem.setAttribute('fill', 'white')
+	svgRoot.appendChild(selectedSignalElem)
+	setOverlay(defaultMessage)
+}
+
+function setOverlay(t){
+	if (selectedSignalElem.firstChild){
+		selectedSignalElem.removeChild(selectedSignalElem.firstChild)
+	}
+	selectedSignalElem.appendChild(document.createTextNode(t))
+
+}
+
+setTimeout(addOverlay, 10)
 
 function arr(a){
 	return Array.prototype.slice.call(a)
@@ -24,6 +48,7 @@ svgRoot.addEventListener('click', function(e){
 })
 
 function highlightSignal(name){
+	setOverlay(name || defaultMessage)
 	$$('.selectedSignal').forEach(function(i){i.classList.remove('selectedSignal')})
 	if (name){
 		$$('g.signal').forEach(function(i){
