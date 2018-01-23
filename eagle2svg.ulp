@@ -1164,7 +1164,7 @@ void update_used_board_layers(UL_BOARD B)
 		int used = L.used;
 		if (g_only_visible)
 		{
-			used &= L.visible;
+			used = L.visible;
 		}
 		g_used_layers[L.number]=used;
 	}
@@ -1275,20 +1275,13 @@ void write_svg_board(string fileName)
 			{
 				update_used_board_layers(B);
 				write_board_header(B);
-				
-				write_svg_board_layer(B, LAYER_BOTTOM, "Bottom");
-				write_svg_board_layer(B, LAYER_BPLACE, "bPlace");
-				write_svg_board_layer(B, LAYER_BNAMES, "bNames");
-				write_svg_board_layer(B, LAYER_TOP, "Top");
-				write_svg_board_layer(B, LAYER_PADS, "Pads");
-				write_svg_board_layer(B, LAYER_VIAS, "Vias");
-				write_svg_board_layer(B, LAYER_TPLACE, "tPlace");
-				write_svg_board_layer(B, LAYER_TNAMES, "tNames");
-				write_svg_board_layer(B, LAYER_DOCUMENT, "Document");
-				write_svg_board_layer(B, LAYER_REFERENCE, "Reference");
-				write_svg_board_layer(B, LAYER_DIMENSION, "Dimension");
+				B.layers(L)
+				{
+                        		if (g_used_layers[L.number])
+						write_svg_board_layer(B, L.number, L.name);
+                		}
 
-				//B.layers(L)
+				// B.layers(L)
 
 				write_board_footer(B);
 			}
@@ -1422,4 +1415,5 @@ else
 	dlgMessageBox("Please run from schematic or board editor." ); 
 	exit(EXIT_FAILURE);
 }
+
 
